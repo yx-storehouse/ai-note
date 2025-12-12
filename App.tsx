@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { analyzeText } from './services/geminiService';
 import { getGist, createGist, updateGist } from './services/giteeService';
-import { SmartNote, NoteCategoryEnum, AnalysisResponse, GiteeConfig } from './types';
+import { SmartNote, NoteCategoryEnum, AnalysisResponse, GiteeConfig, NotificationState } from './types';
 import { Icons } from './components/Icon';
 import { NoteCard } from './components/NoteCard';
+import { Notification } from './components/Notification';
 
 const STORAGE_KEY = 'smart-notes-data';
 const GITEE_CONFIG_KEY = 'smart-notes-gitee-config';
@@ -22,29 +23,79 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('全部');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [syncMsg, setSyncMsg] = useState<string | null>(null);
-
+  
   const [giteeConfig, setGiteeConfig] = useState<GiteeConfig>({ access_token: '', gist_id: '' });
+  
+  // Notification State
+  const [notification, setNotification] = useState<NotificationState | null>(null);
 
-  // Load data
+  // Masonry Layout State
+  const [numColumns, setNumColumns] = useState<number>(3);
+
+  // Helper to trigger notification
+  const showNotification = (
+    message: string, 
+    type: 'info' | 'success' | 'warning', 
+    actionLabel?: string, 
+    onAction?: () => void
+  ) => {
+    setNotification({ show: true, message, type, actionLabel, onAction, onClose: () => setNotification(null) });
+  };
+
+  // Helper: Get latest timestamp from notes
+  const getLatestTimestamp = (notesArr: SmartNote[]) => {
+    if (!notesArr || notesArr.length === 0) return 0;
+    return Math.max(...notesArr.map(n => n.updatedAt || n.createdAt));
+  };
+
+  // Handle Resize for Masonry Layout
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setNumColumns(3);
+      } else if (window.innerWidth >= 768) {
+        setNumColumns(2);
+      } else {
+        setNumColumns(1);
+      }
+    };
+
+    // Initial check
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Initial Load
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
+    const savedConfig = localStorage.getItem(GITEE_CONFIG_KEY);
+    
+    let localNotes: SmartNote[] = [];
     if (saved) {
       try {
-        setNotes(JSON.parse(saved));
+        localNotes = JSON.parse(saved);
+        setNotes(localNotes);
       } catch (e) {
         console.error("Failed to parse saved notes");
       }
     }
-    const savedConfig = localStorage.getItem(GITEE_CONFIG_KEY);
+
     if (savedConfig) {
       try {
-        setGiteeConfig(JSON.parse(savedConfig));
+        const config = JSON.parse(savedConfig);
+        setGiteeConfig(config);
+        
+        // Startup Check: Compare Local vs Cloud if config exists
+        if (config.access_token && config.gist_id) {
+          checkCloudUpdates(config, localNotes);
+        }
       } catch (e) {}
     }
   }, []);
 
-  // Save data
+  // Save to local storage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
   }, [notes]);
@@ -52,6 +103,76 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(GITEE_CONFIG_KEY, JSON.stringify(giteeConfig));
   }, [giteeConfig]);
+
+  // Check Cloud Updates Logic
+  const checkCloudUpdates = async (config: GiteeConfig, currentLocalNotes: SmartNote[]) => {
+    try {
+      const cloudNotes = await getGist(config.gist_id, config.access_token);
+      
+      const localTs = getLatestTimestamp(currentLocalNotes);
+      const cloudTs = getLatestTimestamp(cloudNotes);
+
+      // Simple string comparison for content equality
+      const isContentDifferent = JSON.stringify(currentLocalNotes) !== JSON.stringify(cloudNotes);
+
+      if (isContentDifferent) {
+        if (cloudTs > localTs) {
+           showNotification("发现云端有更新的版本", "info", "从云端恢复", () => {
+              setNotes(cloudNotes);
+              showNotification("已同步为最新云端版本", "success");
+           });
+        } else if (localTs > cloudTs) {
+           showNotification("本地数据较新，尚未同步", "info", "上传到云端", () => {
+             handleGiteeSync('upload', currentLocalNotes);
+           });
+        } else {
+           // Timestamps match (or 0) but content differs (rare case, maybe manual edit)
+           // Default to asking user
+           showNotification("本地与云端数据不一致", "warning", "从云端覆盖", () => {
+             setNotes(cloudNotes);
+             showNotification("已恢复", "success");
+           });
+        }
+      }
+    } catch (e) {
+      console.warn("Startup sync check failed", e);
+    }
+  };
+
+  // Modified Gitee Sync to accept notes argument
+  const handleGiteeSync = async (direction: 'upload' | 'download', notesToUpload?: SmartNote[]) => {
+    if (!giteeConfig.access_token) {
+      showNotification("请先在设置中配置 Gitee Access Token", "warning", "去设置", () => setSettingsMode(true));
+      return;
+    }
+    setIsSyncing(true);
+
+    try {
+      if (direction === 'upload') {
+        const payload = notesToUpload || notes;
+        if (!giteeConfig.gist_id) {
+          const newGistId = await createGist(payload, giteeConfig.access_token);
+          setGiteeConfig(prev => ({ ...prev, gist_id: newGistId }));
+          showNotification("创建并上传成功！", "success");
+        } else {
+          await updateGist(giteeConfig.gist_id, payload, giteeConfig.access_token);
+          showNotification("同步到云端成功！", "success");
+        }
+      } else {
+        if (!giteeConfig.gist_id) {
+           showNotification("未设置 Gist ID，无法下载", "warning");
+        } else {
+          const cloudNotes = await getGist(giteeConfig.gist_id, giteeConfig.access_token);
+          setNotes(cloudNotes);
+          showNotification("从云端恢复成功！", "success");
+        }
+      }
+    } catch (err: any) {
+      showNotification(`同步失败: ${err.message}`, "warning");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // AI Processing
   const handleProcess = async () => {
@@ -61,7 +182,8 @@ export default function App() {
 
     try {
       const response: AnalysisResponse = await analyzeText(inputText);
-      
+      const timestamp = Date.now();
+
       const newNotes: SmartNote[] = response.notes.map(n => ({
         id: crypto.randomUUID(),
         title: n.title,
@@ -71,12 +193,20 @@ export default function App() {
         tags: n.tags,
         fields: n.fields,
         codeBlocks: n.codeBlocks,
-        createdAt: Date.now()
+        createdAt: timestamp,
+        updatedAt: timestamp
       }));
 
-      setNotes(prev => [...newNotes, ...prev]);
+      const updatedAllNotes = [...newNotes, ...notes];
+      setNotes(updatedAllNotes);
       setInputText('');
       setInputMode(false);
+
+      // Prompt for sync after adding
+      if (giteeConfig.access_token) {
+        showNotification("笔记已添加，是否同步？", "info", "立即同步", () => handleGiteeSync('upload', updatedAllNotes));
+      }
+
     } catch (err: any) {
       setErrorMsg(err.message || "分析失败，请检查 API Key 或重试。");
     } finally {
@@ -85,8 +215,15 @@ export default function App() {
   };
 
   const handleDelete = useCallback((id: string) => {
-    setNotes(prev => prev.filter(n => n.id !== id));
-  }, []);
+    setNotes(prev => {
+       const updated = prev.filter(n => n.id !== id);
+       if (giteeConfig.access_token) {
+         // Use setTimeout to avoid state update conflict during render cycle
+         setTimeout(() => showNotification("笔记已删除，是否同步？", "info", "立即同步", () => handleGiteeSync('upload', updated)), 100);
+       }
+       return updated;
+    });
+  }, [giteeConfig.access_token]);
 
   const handleEdit = (note: SmartNote) => {
     setEditingNote({ ...note });
@@ -95,48 +232,21 @@ export default function App() {
 
   const handleSaveEdit = () => {
     if (editingNote) {
-      setNotes(prev => prev.map(n => n.id === editingNote.id ? editingNote : n));
+      const timestamp = Date.now();
+      const updatedNote = { ...editingNote, updatedAt: timestamp };
+      
+      const updatedNotes = notes.map(n => n.id === editingNote.id ? updatedNote : n);
+      setNotes(updatedNotes);
       setEditMode(false);
       setEditingNote(null);
-    }
-  };
 
-  // Gitee Sync
-  const handleGiteeSync = async (direction: 'upload' | 'download') => {
-    if (!giteeConfig.access_token) {
-      setSyncMsg("错误：请先设置 Gitee Access Token");
-      return;
-    }
-    setIsSyncing(true);
-    setSyncMsg(null);
-
-    try {
-      if (direction === 'upload') {
-        if (!giteeConfig.gist_id) {
-          const newGistId = await createGist(notes, giteeConfig.access_token);
-          setGiteeConfig(prev => ({ ...prev, gist_id: newGistId }));
-          setSyncMsg("创建 Gist 并上传成功！");
-        } else {
-          await updateGist(giteeConfig.gist_id, notes, giteeConfig.access_token);
-          setSyncMsg("同步到云端成功！");
-        }
-      } else {
-        if (!giteeConfig.gist_id) {
-           setSyncMsg("错误：没有设置 Gist ID，无法下载");
-        } else {
-          const cloudNotes = await getGist(giteeConfig.gist_id, giteeConfig.access_token);
-          setNotes(cloudNotes);
-          setSyncMsg("从云端恢复成功！");
-        }
+      // Prompt for sync after edit
+      if (giteeConfig.access_token) {
+        showNotification("笔记已修改，是否同步？", "info", "立即同步", () => handleGiteeSync('upload', updatedNotes));
       }
-    } catch (err: any) {
-      setSyncMsg(`同步失败: ${err.message}`);
-    } finally {
-      setIsSyncing(false);
     }
   };
 
-  // Local Import/Export
   const handleExportJSON = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(notes, null, 2));
     const downloadAnchorNode = document.createElement('a');
@@ -157,6 +267,7 @@ export default function App() {
           if (Array.isArray(imported)) {
             setNotes(imported);
             setSettingsMode(false);
+            showNotification("导入成功！", "success");
           } else {
             alert("文件格式不正确");
           }
@@ -180,15 +291,51 @@ export default function App() {
     return matchesSearch && matchesCategory;
   });
 
-  // Dynamic Categories
-  const existingCategories = Array.from(new Set(notes.map(n => n.category)));
-  const defaultCategories = Object.values(NoteCategoryEnum) as string[];
-  const categories = ['全部', ...Array.from(new Set([...defaultCategories, ...existingCategories]))];
+  // Organize notes into columns for Masonry layout
+  const masonryColumns = Array.from({ length: numColumns }, () => [] as SmartNote[]);
+  filteredNotes.forEach((note, index) => {
+    masonryColumns[index % numColumns].push(note);
+  });
+
+  // Dynamic Categories: Get distinct categories, sort by count descending
+  const getCategoryList = () => {
+    const counts: Record<string, number> = {};
+    notes.forEach(n => {
+      counts[n.category] = (counts[n.category] || 0) + 1;
+    });
+
+    const distinctCats = Array.from(new Set([
+      ...Object.values(NoteCategoryEnum), 
+      ...Object.keys(counts)
+    ]));
+
+    return ['全部', ...distinctCats].sort((a, b) => {
+       if (a === '全部') return -1;
+       if (b === '全部') return 1;
+       // Sort by count desc
+       const countA = counts[a] || 0;
+       const countB = counts[b] || 0;
+       return countB - countA; 
+    });
+  };
+
+  const categories = getCategoryList();
 
   return (
     <div className="flex h-screen overflow-hidden bg-dot-pattern text-textMain relative">
       <div className="absolute inset-0 pointer-events-none vignette z-0"></div>
       
+      {/* Toast Notification */}
+      {notification && notification.show && (
+        <Notification 
+          message={notification.message}
+          type={notification.type}
+          actionLabel={notification.actionLabel}
+          onAction={notification.onAction}
+          onClose={notification.onClose!}
+        />
+      )}
+
       {/* Sidebar / Navigation */}
       <aside className="w-64 bg-surface/50 border-r border-border backdrop-blur-sm flex flex-col shrink-0 hidden md:flex z-10">
         <div className="p-6">
@@ -214,31 +361,35 @@ export default function App() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-2">
-          <h3 className="text-[10px] font-bold text-textMuted uppercase tracking-widest mb-4 px-2">FILTER BY</h3>
+          <h3 className="text-[10px] font-bold text-textMuted uppercase tracking-widest mb-4 px-2 flex justify-between">
+            <span>FILTER BY</span>
+            <span className="text-[9px] opacity-50">SORTED BY COUNT</span>
+          </h3>
           <nav className="space-y-1">
-            {categories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`w-full text-left px-3 py-2 rounded text-sm transition-all border border-transparent ${
-                  selectedCategory === cat 
-                    ? 'bg-surfaceHighlight text-white border-border shadow-sm' 
-                    : 'text-textMuted hover:text-white hover:bg-white/5'
-                }`}
-              >
-                {cat}
-                {cat !== '全部' && (
-                  <span className={`float-right text-xs ${selectedCategory === cat ? 'text-white' : 'text-textMuted/50'}`}>
-                    {notes.filter(n => n.category === cat).length}
+            {categories.map(cat => {
+              const count = cat === '全部' ? notes.length : notes.filter(n => n.category === cat).length;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`w-full text-left px-3 py-2 rounded text-sm transition-all border border-transparent group flex justify-between items-center ${
+                    selectedCategory === cat 
+                      ? 'bg-surfaceHighlight text-white border-border shadow-sm' 
+                      : 'text-textMuted hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <span className="truncate">{cat}</span>
+                  <span className={`text-xs ${selectedCategory === cat ? 'text-white' : 'text-textMuted/50 group-hover:text-textMuted'}`}>
+                    {count}
                   </span>
-                )}
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </nav>
         </div>
         
         <div className="p-4 text-[10px] text-textMuted/30 text-center border-t border-border">
-          SMART NOTE AI v1.1
+          SMART NOTE AI v1.3
         </div>
       </aside>
 
@@ -278,7 +429,7 @@ export default function App() {
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
           
-          {/* Notes Grid */}
+          {/* Notes Grid (Masonry Layout) */}
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-6 md:hidden">
                  <input 
@@ -302,10 +453,15 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
-                {filteredNotes.map(note => (
-                  <NoteCard key={note.id} note={note} onDelete={handleDelete} onEdit={handleEdit} />
-                ))}
+              // Masonry Container
+              <div className="flex gap-6 pb-20 items-start w-full">
+                 {masonryColumns.map((colNotes, colIndex) => (
+                   <div key={colIndex} className="flex-1 flex flex-col gap-6 min-w-0">
+                      {colNotes.map(note => (
+                        <NoteCard key={note.id} note={note} onDelete={handleDelete} onEdit={handleEdit} />
+                      ))}
+                   </div>
+                 ))}
               </div>
             )}
           </div>
@@ -358,7 +514,6 @@ export default function App() {
                                {isSyncing ? '...' : <><Icons.Download className="w-3 h-3" /> 从云端恢复</>}
                             </button>
                          </div>
-                         {syncMsg && <p className="text-xs text-textMuted text-center">{syncMsg}</p>}
                          <p className="text-[10px] text-textMuted text-center">注意：云端恢复将覆盖本地所有数据</p>
                       </div>
                    </div>
@@ -408,7 +563,7 @@ export default function App() {
                    
                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs text-textMuted block mb-1">分类</label>
+                        <label className="text-xs text-textMuted block mb-1">分类 (支持自定义)</label>
                         <input 
                            type="text" 
                            list="category-suggestions"

@@ -28,6 +28,7 @@ export interface SmartNote {
   fields: NoteField[]; // Structured key-value pairs extracted
   codeBlocks: string[]; // Larger blocks of code
   createdAt: number;
+  updatedAt?: number; // Added for version comparison
 }
 
 export interface AnalysisResponse {
@@ -44,4 +45,13 @@ export interface AnalysisResponse {
 export interface GiteeConfig {
   access_token: string;
   gist_id: string;
+}
+
+export interface NotificationState {
+  show: boolean;
+  message: string;
+  type: 'info' | 'success' | 'warning';
+  actionLabel?: string;
+  onAction?: () => void;
+  onClose?: () => void;
 }
