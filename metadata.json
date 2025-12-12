@@ -1,0 +1,5 @@
+{
+  "name": "智能笔记 AI",
+  "description": "利用 Gemini AI 智能整理、分类和检索您的技术笔记及配置。",
+  "requestFramePermissions": []
+}
