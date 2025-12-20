@@ -1,4 +1,4 @@
-name = "smart-note-ai"
+name = "ai-note"
 main = "cloudflare-worker-proxy.js"
 compatibility_date = "2025-12-20"
 

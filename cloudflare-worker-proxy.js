@@ -78,9 +78,21 @@ export default {
       }
     }
 
-    // 其他路径交给静态资源处理
+    // 其他路径交给静态资源处理（SPA 路由支持）
     if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
+      // 对于 SPA，所有非 API 和非静态资源的请求都返回 index.html
+      const assetResponse = await env.ASSETS.fetch(request);
+      
+      // 如果是 404 且不是 API 路径，返回 index.html（SPA 路由）
+      if (assetResponse.status === 404 && !url.pathname.startsWith('/api')) {
+        const indexRequest = new Request(new URL('/index.html', request.url), request);
+        const indexResponse = await env.ASSETS.fetch(indexRequest);
+        if (indexResponse.status === 200) {
+          return indexResponse;
+        }
+      }
+      
+      return assetResponse;
     }
 
     return new Response('Not found', { status: 404 });
