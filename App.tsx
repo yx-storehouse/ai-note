@@ -629,7 +629,7 @@ export default function App() {
                          </div>
                          {import.meta.env.DEV && apiConfig.apiKey && (
                             <div className="p-2 bg-green-900/20 border border-green-500/30 rounded text-xs text-green-400">
-                               ✓ 开发环境 API Key 已配置（长度: {apiConfig.apiKey.length} 字符）
+                               ✓ 开发环境 API Key 已配置（长度: {apiConfig.apiKey?.length || 0} 字符）
                             </div>
                          )}
                       </div>

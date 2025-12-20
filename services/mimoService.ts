@@ -58,7 +58,7 @@ export const analyzeText = async (text: string, apiKey: string | null, apiEndpoi
   `;
 
   try {
-    console.log('调用 MIMO API:', { endpoint, apiKeyLength: apiKey.length });
+    console.log('调用 MIMO API:', { endpoint, apiKeyLength: apiKey?.length || 'N/A (Worker)' });
     
     // 使用 OpenAI 兼容格式调用 API
     // 根据 MIMO API 文档调整参数
@@ -142,12 +142,19 @@ export const analyzeText = async (text: string, apiKey: string | null, apiEndpoi
     
     // 解析响应内容
     let content = '';
-    if (data.choices && data.choices[0] && data.choices[0].message) {
+    if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
       content = data.choices[0].message.content;
     } else if (data.content) {
       content = data.content;
     } else {
-      throw new Error("API 响应格式不正确");
+      console.error('API 响应数据:', JSON.stringify(data, null, 2));
+      throw new Error("API 响应格式不正确：未找到 content 字段");
+    }
+    
+    // 确保 content 不是 null 或 undefined
+    if (!content || typeof content !== 'string') {
+      console.error('Content 值:', content);
+      throw new Error("API 返回的 content 为空或格式不正确");
     }
 
     // 尝试解析 JSON
