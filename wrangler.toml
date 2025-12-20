@@ -4,6 +4,8 @@ compatibility_date = "2025-12-20"
 
 [assets]
 directory = "./dist"
+# 注意：_redirects 文件会在构建后自动删除（见 scripts/clean-redirects.js）
+# 路由由 Worker 处理，不需要 _redirects 文件
 
 # 环境变量配置说明：
 # 需要在 Cloudflare Dashboard 中设置以下环境变量：
