@@ -47,6 +47,12 @@ export interface GiteeConfig {
   gist_id: string;
 }
 
+export interface ApiConfig {
+  apiKey: string;
+  apiEndpoint?: string; // 可选的 API 端点，如果不填则使用默认值
+  modelName?: string; // 可选的模型名称，如果不填则使用默认值
+}
+
 export interface NotificationState {
   show: boolean;
   message: string;

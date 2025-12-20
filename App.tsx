@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { analyzeText } from './services/geminiService';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { analyzeText } from './services/mimoService';
 import { getGist, createGist, updateGist } from './services/giteeService';
-import { SmartNote, NoteCategoryEnum, AnalysisResponse, GiteeConfig, NotificationState } from './types';
+import { SmartNote, NoteCategoryEnum, AnalysisResponse, GiteeConfig, ApiConfig, NotificationState } from './types';
 import { Icons } from './components/Icon';
 import { NoteCard } from './components/NoteCard';
 import { Notification } from './components/Notification';
 
 const STORAGE_KEY = 'smart-notes-data';
 const GITEE_CONFIG_KEY = 'smart-notes-gitee-config';
+const API_CONFIG_KEY = 'smart-notes-api-config';
 
 export default function App() {
   const [inputMode, setInputMode] = useState<boolean>(false);
@@ -25,12 +26,16 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const [giteeConfig, setGiteeConfig] = useState<GiteeConfig>({ access_token: '', gist_id: '' });
+  const [apiConfig, setApiConfig] = useState<ApiConfig>({ apiKey: '', apiEndpoint: '', modelName: '' });
   
   // Notification State
   const [notification, setNotification] = useState<NotificationState | null>(null);
 
   // Masonry Layout State
   const [numColumns, setNumColumns] = useState<number>(3);
+  
+  // 标记是否已完成初始化，防止初始化时覆盖 localStorage
+  const isInitialized = useRef(false);
 
   // Helper to trigger notification
   const showNotification = (
@@ -70,7 +75,8 @@ export default function App() {
   // Initial Load
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    const savedConfig = localStorage.getItem(GITEE_CONFIG_KEY);
+    const savedGiteeConfig = localStorage.getItem(GITEE_CONFIG_KEY);
+    const savedApiConfig = localStorage.getItem(API_CONFIG_KEY);
     
     let localNotes: SmartNote[] = [];
     if (saved) {
@@ -82,27 +88,65 @@ export default function App() {
       }
     }
 
-    if (savedConfig) {
+    if (savedGiteeConfig) {
       try {
-        const config = JSON.parse(savedConfig);
-        setGiteeConfig(config);
-        
-        // Startup Check: Compare Local vs Cloud if config exists
-        if (config.access_token && config.gist_id) {
-          checkCloudUpdates(config, localNotes);
+        const config = JSON.parse(savedGiteeConfig);
+        // 只有当配置中有实际值时才设置，避免用空值覆盖
+        if (config && (config.access_token || config.gist_id)) {
+          setGiteeConfig(config);
+          
+          // Startup Check: Compare Local vs Cloud if config exists
+          if (config.access_token && config.gist_id) {
+            checkCloudUpdates(config, localNotes);
+          }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error("Failed to parse saved Gitee config", e);
+      }
     }
+
+    if (savedApiConfig) {
+      try {
+        const config = JSON.parse(savedApiConfig);
+        // 只有当配置中有实际值时才设置，避免用空值覆盖
+        if (config && config.apiKey) {
+          setApiConfig(config);
+        }
+      } catch (e) {
+        console.error("Failed to parse saved API config", e);
+      }
+    }
+    
+    // 标记初始化完成，之后的状态变化才会保存到 localStorage
+    isInitialized.current = true;
   }, []);
 
   // Save to local storage
+  // 使用 ref 标记是否已初始化，避免初始化时覆盖已有数据
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+    // 只在初始化完成后才保存
+    if (isInitialized.current) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+    }
   }, [notes]);
 
   useEffect(() => {
-    localStorage.setItem(GITEE_CONFIG_KEY, JSON.stringify(giteeConfig));
+    if (isInitialized.current) {
+      // 只有当配置中有实际值时才保存，避免保存空值覆盖已有数据
+      if (giteeConfig.access_token || giteeConfig.gist_id) {
+        localStorage.setItem(GITEE_CONFIG_KEY, JSON.stringify(giteeConfig));
+      }
+    }
   }, [giteeConfig]);
+
+  useEffect(() => {
+    if (isInitialized.current) {
+      // 只有当配置中有实际值时才保存，避免保存空值覆盖已有数据
+      if (apiConfig.apiKey) {
+        localStorage.setItem(API_CONFIG_KEY, JSON.stringify(apiConfig));
+      }
+    }
+  }, [apiConfig]);
 
   // Check Cloud Updates Logic
   const checkCloudUpdates = async (config: GiteeConfig, currentLocalNotes: SmartNote[]) => {
@@ -177,11 +221,19 @@ export default function App() {
   // AI Processing
   const handleProcess = async () => {
     if (!inputText.trim()) return;
+    
+    if (!apiConfig.apiKey) {
+      setErrorMsg("请先在设置中配置 MIMO API Key");
+      setInputMode(false);
+      setSettingsMode(true);
+      return;
+    }
+    
     setIsProcessing(true);
     setErrorMsg(null);
 
     try {
-      const response: AnalysisResponse = await analyzeText(inputText);
+      const response: AnalysisResponse = await analyzeText(inputText, apiConfig.apiKey, apiConfig.apiEndpoint, apiConfig.modelName);
       const timestamp = Date.now();
 
       const newNotes: SmartNote[] = response.notes.map(n => ({
@@ -208,7 +260,15 @@ export default function App() {
       }
 
     } catch (err: any) {
-      setErrorMsg(err.message || "分析失败，请检查 API Key 或重试。");
+      console.error("处理失败:", err);
+      const errorMessage = err.message || "分析失败，请检查 API Key 或重试。";
+      setErrorMsg(errorMessage);
+      // 如果错误信息很长，也显示通知
+      if (errorMessage.length > 50) {
+        showNotification(errorMessage.substring(0, 100) + "...", "warning");
+      } else {
+        showNotification(errorMessage, "warning");
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -477,27 +537,117 @@ export default function App() {
                       <Icons.X className="w-5 h-5" />
                    </button>
                 </div>
-                <div className="p-6 space-y-6">
+                <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+                   {/* API Configuration Section */}
+                   <div>
+                      <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                         <Icons.Sparkles className="w-4 h-4" /> MIMO AI 配置
+                      </h3>
+                      <div className="space-y-3">
+                         <div>
+                            <label className="text-xs text-textMuted block mb-1">API Key *</label>
+                            <input 
+                               type="password" 
+                               placeholder="请输入 MIMO API Key" 
+                               value={apiConfig.apiKey}
+                               onChange={(e) => setApiConfig(prev => ({...prev, apiKey: e.target.value}))}
+                               className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
+                            />
+                         </div>
+                         <div>
+                            <label className="text-xs text-textMuted block mb-1">模型名称 (可选)</label>
+                            <input 
+                               type="text" 
+                               placeholder="留空使用默认模型 (mimo-1)" 
+                               value={apiConfig.modelName || ''}
+                               onChange={(e) => setApiConfig(prev => ({...prev, modelName: e.target.value}))}
+                               className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
+                            />
+                            <p className="text-[10px] text-textMuted mt-1">如果遇到 "Param Incorrect" 错误，请尝试不同的模型名称</p>
+                         </div>
+                         <div>
+                            <label className="text-xs text-textMuted block mb-1">API Endpoint (可选)</label>
+                            <input 
+                               type="text" 
+                               placeholder="留空使用默认端点" 
+                               value={apiConfig.apiEndpoint || ''}
+                               onChange={(e) => setApiConfig(prev => ({...prev, apiEndpoint: e.target.value}))}
+                               className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
+                            />
+                            <p className="text-[10px] text-textMuted mt-1">
+                              开发环境: 自动使用代理 (/api/mimo)<br/>
+                              生产环境: https://api.xiaomimimo.com/v1/chat/completions<br/>
+                              <span className="text-yellow-400">⚠️ 生产环境如遇 CORS 错误，请使用 Cloudflare Workers 代理</span>
+                            </p>
+                         </div>
+                         <div className="flex gap-2 pt-2">
+                            <button
+                               onClick={() => {
+                                  localStorage.setItem(API_CONFIG_KEY, JSON.stringify(apiConfig));
+                                  showNotification("API 配置已保存到浏览器本地", "success");
+                               }}
+                               className="flex-1 bg-white text-black hover:bg-gray-200 py-2 rounded text-sm font-semibold transition-all"
+                            >
+                               保存配置
+                            </button>
+                            <button
+                               onClick={async () => {
+                                  if (!apiConfig.apiKey) {
+                                    showNotification("请先输入 API Key", "warning");
+                                    return;
+                                  }
+                                  try {
+                                    setIsProcessing(true);
+                                    const testResponse = await analyzeText("测试", apiConfig.apiKey, apiConfig.apiEndpoint, apiConfig.modelName);
+                                    showNotification("API 连接测试成功！", "success");
+                                  } catch (err: any) {
+                                    showNotification(`测试失败: ${err.message}`, "warning");
+                                  } finally {
+                                    setIsProcessing(false);
+                                  }
+                               }}
+                               disabled={isProcessing || !apiConfig.apiKey}
+                               className="flex-1 bg-surfaceHighlight hover:bg-white/10 border border-border text-white py-2 rounded text-sm transition-all disabled:opacity-50"
+                            >
+                               测试连接
+                            </button>
+                         </div>
+                         {apiConfig.apiKey && (
+                            <div className="p-2 bg-green-900/20 border border-green-500/30 rounded text-xs text-green-400">
+                               ✓ API Key 已配置（长度: {apiConfig.apiKey.length} 字符）
+                            </div>
+                         )}
+                      </div>
+                   </div>
+
+                   <hr className="border-border" />
+
                    {/* Gitee Section */}
                    <div>
                       <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
                          <Icons.Cloud className="w-4 h-4" /> Gitee 云同步
                       </h3>
                       <div className="space-y-3">
-                         <input 
-                            type="text" 
-                            placeholder="Gitee Access Token" 
-                            value={giteeConfig.access_token}
-                            onChange={(e) => setGiteeConfig(prev => ({...prev, access_token: e.target.value}))}
-                            className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50"
-                         />
-                         <input 
-                            type="text" 
-                            placeholder="Gist ID (留空则自动创建)" 
-                            value={giteeConfig.gist_id}
-                            onChange={(e) => setGiteeConfig(prev => ({...prev, gist_id: e.target.value}))}
-                            className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50"
-                         />
+                         <div>
+                            <label className="text-xs text-textMuted block mb-1">Access Token</label>
+                            <input 
+                               type="password" 
+                               placeholder="Gitee Access Token" 
+                               value={giteeConfig.access_token}
+                               onChange={(e) => setGiteeConfig(prev => ({...prev, access_token: e.target.value}))}
+                               className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
+                            />
+                         </div>
+                         <div>
+                            <label className="text-xs text-textMuted block mb-1">Gist ID</label>
+                            <input 
+                               type="text" 
+                               placeholder="Gist ID (留空则自动创建)" 
+                               value={giteeConfig.gist_id}
+                               onChange={(e) => setGiteeConfig(prev => ({...prev, gist_id: e.target.value}))}
+                               className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
+                            />
+                         </div>
                          <div className="flex gap-2 pt-2">
                             <button 
                                onClick={() => handleGiteeSync('upload')}
@@ -515,6 +665,20 @@ export default function App() {
                             </button>
                          </div>
                          <p className="text-[10px] text-textMuted text-center">注意：云端恢复将覆盖本地所有数据</p>
+                         {giteeConfig.access_token && (
+                            <div className="p-2 bg-green-900/20 border border-green-500/30 rounded text-xs text-green-400">
+                               ✓ Gitee Token 已保存（存储在浏览器本地）
+                            </div>
+                         )}
+                         <button
+                            onClick={() => {
+                              localStorage.setItem(GITEE_CONFIG_KEY, JSON.stringify(giteeConfig));
+                              showNotification("Gitee 配置已保存", "success");
+                            }}
+                            className="w-full bg-surfaceHighlight hover:bg-white/10 border border-border text-white py-2 rounded text-sm transition-all"
+                         >
+                            保存 Gitee 配置
+                         </button>
                       </div>
                    </div>
 
