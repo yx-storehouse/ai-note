@@ -10,10 +10,24 @@ directory = "./dist"
 # 环境变量配置说明：
 # 需要在 Cloudflare Dashboard 中设置以下环境变量：
 # 1. 进入 Workers & Pages → 你的项目 → Settings → Variables
-# 2. 添加环境变量：
+# 2. 添加以下环境变量：
+#
+#    必需变量：
 #    - Name: MIMO_API_KEY
-#    - Value: 你的小米 MIMO API Key
+#      Value: 你的小米 MIMO API Key
+#
+#    可选变量（如果不配置，将使用默认值）：
+#    - Name: MIMO_MODEL_NAME
+#      Value: 模型名称（默认: mimo-1）
+#      示例值: mimo-v2-flash, mimo-1, mimo-pro 等
+#
+#    - Name: GITEE_TOKEN
+#      Value: Gitee Access Token（用于云同步功能）
+#
+#    - Name: GITEE_GIST_ID
+#      Value: Gist ID（用于存储笔记数据）
+#
 # 3. 保存后重新部署
 #
-# 注意：环境变量是加密存储的，不会暴露给用户浏览器
+# 注意：所有环境变量都是加密存储的，不会暴露给用户浏览器
 

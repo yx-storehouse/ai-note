@@ -60,12 +60,27 @@ View your app in AI Studio: https://ai.studio/apps/drive/1rCP8XZr-IA9nA47q6JGjMX
    - 在 Cloudflare Dashboard 中：
      1. 进入 **Workers & Pages** → 你的项目 → **Settings** → **Variables**
      2. 在 **Environment Variables** 部分，点击 **Add variable**
-     3. 添加变量：
+     3. 添加以下环境变量：
+     
+        **必需变量：**
         - **Name**: `MIMO_API_KEY`
-        - **Value**: 你的小米 MIMO API Key
+          **Value**: 你的小米 MIMO API Key
+     
+        **可选变量（如果不配置，将使用默认值）：**
+        - **Name**: `MIMO_MODEL_NAME`
+          **Value**: 模型名称（默认: `mimo-1`）
+          示例值: `mimo-v2-flash`, `mimo-1`, `mimo-pro` 等
+     
+        - **Name**: `GITEE_TOKEN`
+          **Value**: Gitee Access Token（用于云同步功能）
+     
+        - **Name**: `GITEE_GIST_ID`
+          **Value**: Gist ID（用于存储笔记数据）
+     
      4. 点击 **Save** 保存
-   - ✅ API Key 存储在 Worker 环境变量中，**完全不会暴露给用户浏览器**
-   - ✅ 更安全，用户无需输入 API Key
+   - ✅ 所有配置存储在 Worker 环境变量中，**完全不会暴露给用户浏览器**
+   - ✅ 更安全，用户无需输入任何敏感信息
+   - ✅ 生产环境会自动从 Worker 读取配置
    - ⚠️ **重要**：配置环境变量后，需要重新部署项目才能生效
 
 5. **部署**

@@ -88,6 +88,47 @@ export default function App() {
       }
     }
 
+    const isDev = import.meta.env.DEV;
+    
+    // 生产环境：从 Worker 获取配置
+    if (!isDev) {
+      fetch('/api/config')
+        .then(res => res.json())
+        .then(config => {
+          // 设置模型名称
+          if (config.modelName) {
+            setApiConfig(prev => ({ ...prev, modelName: config.modelName }));
+          }
+          // 设置 Gitee 配置
+          if (config.giteeToken || config.gistId) {
+            const giteeConfig = {
+              access_token: config.giteeToken || '',
+              gist_id: config.gistId || '',
+            };
+            setGiteeConfig(giteeConfig);
+            
+            // 如果配置完整，检查云端更新
+            if (giteeConfig.access_token && giteeConfig.gist_id) {
+              checkCloudUpdates(giteeConfig, localNotes);
+            }
+          }
+        })
+        .catch(err => {
+          console.warn('Failed to load config from Worker:', err);
+          // 如果 Worker 配置失败，尝试从 localStorage 加载
+          loadFromLocalStorage(savedGiteeConfig, savedApiConfig, localNotes);
+        });
+    } else {
+      // 开发环境：从 localStorage 加载
+      loadFromLocalStorage(savedGiteeConfig, savedApiConfig, localNotes);
+    }
+    
+    // 标记初始化完成，之后的状态变化才会保存到 localStorage
+    isInitialized.current = true;
+  }, []);
+
+  // 从 localStorage 加载配置的辅助函数
+  const loadFromLocalStorage = (savedGiteeConfig: string | null, savedApiConfig: string | null, localNotes: SmartNote[]) => {
     if (savedGiteeConfig) {
       try {
         const config = JSON.parse(savedGiteeConfig);
@@ -116,10 +157,7 @@ export default function App() {
         console.error("Failed to parse saved API config", e);
       }
     }
-    
-    // 标记初始化完成，之后的状态变化才会保存到 localStorage
-    isInitialized.current = true;
-  }, []);
+  };
 
   // Save to local storage
   // 使用 ref 标记是否已初始化，避免初始化时覆盖已有数据
@@ -567,17 +605,25 @@ export default function App() {
                                ✓ 生产环境：API Key 已配置在 Cloudflare Worker 中，无需在此输入
                             </div>
                          )}
-                         <div>
-                            <label className="text-xs text-textMuted block mb-1">模型名称 (可选)</label>
-                            <input 
-                               type="text" 
-                               placeholder="留空使用默认模型 (mimo-1)" 
-                               value={apiConfig.modelName || ''}
-                               onChange={(e) => setApiConfig(prev => ({...prev, modelName: e.target.value}))}
-                               className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
-                            />
-                            <p className="text-[10px] text-textMuted mt-1">如果遇到 "Param Incorrect" 错误，请尝试不同的模型名称</p>
-                         </div>
+                         {import.meta.env.DEV ? (
+                            // 开发环境：可以自定义模型名称
+                            <div>
+                               <label className="text-xs text-textMuted block mb-1">模型名称 (可选)</label>
+                               <input 
+                                  type="text" 
+                                  placeholder="留空使用默认模型 (mimo-1)" 
+                                  value={apiConfig.modelName || ''}
+                                  onChange={(e) => setApiConfig(prev => ({...prev, modelName: e.target.value}))}
+                                  className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
+                               />
+                               <p className="text-[10px] text-textMuted mt-1">如果遇到 "Param Incorrect" 错误，请尝试不同的模型名称</p>
+                            </div>
+                         ) : (
+                            // 生产环境：模型名称从 Worker 配置读取
+                            <div className="p-3 bg-blue-900/20 border border-blue-500/30 rounded text-xs text-blue-400">
+                               ✓ 模型名称已配置在 Worker 环境变量中: {apiConfig.modelName || 'mimo-1'}
+                            </div>
+                         )}
                          <div>
                             <label className="text-xs text-textMuted block mb-1">API Endpoint (可选)</label>
                             <input 
@@ -613,7 +659,9 @@ export default function App() {
                                   try {
                                     setIsProcessing(true);
                                     const apiKeyForTest = isDev ? apiConfig.apiKey : null;
-                                    const testResponse = await analyzeText("测试", apiKeyForTest, apiConfig.apiEndpoint, apiConfig.modelName);
+                                    // 生产环境使用 Worker 返回的模型名称，开发环境使用用户输入的
+                                    const modelNameForTest = isDev ? apiConfig.modelName : apiConfig.modelName;
+                                    const testResponse = await analyzeText("测试", apiKeyForTest, apiConfig.apiEndpoint, modelNameForTest);
                                     showNotification("API 连接测试成功！", "success");
                                   } catch (err: any) {
                                     showNotification(`测试失败: ${err.message}`, "warning");
@@ -643,26 +691,37 @@ export default function App() {
                          <Icons.Cloud className="w-4 h-4" /> Gitee 云同步
                       </h3>
                       <div className="space-y-3">
-                         <div>
-                            <label className="text-xs text-textMuted block mb-1">Access Token</label>
-                            <input 
-                               type="password" 
-                               placeholder="Gitee Access Token" 
-                               value={giteeConfig.access_token}
-                               onChange={(e) => setGiteeConfig(prev => ({...prev, access_token: e.target.value}))}
-                               className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
-                            />
-                         </div>
-                         <div>
-                            <label className="text-xs text-textMuted block mb-1">Gist ID</label>
-                            <input 
-                               type="text" 
-                               placeholder="Gist ID (留空则自动创建)" 
-                               value={giteeConfig.gist_id}
-                               onChange={(e) => setGiteeConfig(prev => ({...prev, gist_id: e.target.value}))}
-                               className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
-                            />
-                         </div>
+                         {import.meta.env.DEV ? (
+                            // 开发环境：用户可以输入
+                            <>
+                               <div>
+                                  <label className="text-xs text-textMuted block mb-1">Access Token</label>
+                                  <input 
+                                     type="password" 
+                                     placeholder="Gitee Access Token" 
+                                     value={giteeConfig.access_token}
+                                     onChange={(e) => setGiteeConfig(prev => ({...prev, access_token: e.target.value}))}
+                                     className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
+                                  />
+                               </div>
+                               <div>
+                                  <label className="text-xs text-textMuted block mb-1">Gist ID</label>
+                                  <input 
+                                     type="text" 
+                                     placeholder="Gist ID (留空则自动创建)" 
+                                     value={giteeConfig.gist_id}
+                                     onChange={(e) => setGiteeConfig(prev => ({...prev, gist_id: e.target.value}))}
+                                     className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
+                                  />
+                               </div>
+                            </>
+                         ) : (
+                            // 生产环境：从 Worker 配置读取
+                            <div className="p-3 bg-blue-900/20 border border-blue-500/30 rounded text-xs text-blue-400">
+                               ✓ Gitee Token 和 Gist ID 已配置在 Worker 环境变量中<br/>
+                               {giteeConfig.gist_id && `Gist ID: ${giteeConfig.gist_id}`}
+                            </div>
+                         )}
                          <div className="flex gap-2 pt-2">
                             <button 
                                onClick={() => handleGiteeSync('upload')}
@@ -680,9 +739,9 @@ export default function App() {
                             </button>
                          </div>
                          <p className="text-[10px] text-textMuted text-center">注意：云端恢复将覆盖本地所有数据</p>
-                         {giteeConfig.access_token && (
+                         {import.meta.env.DEV && giteeConfig.access_token && (
                             <div className="p-2 bg-green-900/20 border border-green-500/30 rounded text-xs text-green-400">
-                               ✓ Gitee Token 已保存（存储在浏览器本地）
+                               ✓ 开发环境 Gitee Token 已保存（存储在浏览器本地）
                             </div>
                          )}
                          <button

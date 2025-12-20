@@ -24,6 +24,23 @@ export default {
       });
     }
 
+    // 返回配置信息（不包含敏感信息）
+    if (url.pathname === '/api/config') {
+      return new Response(
+        JSON.stringify({
+          modelName: env.MIMO_MODEL_NAME || 'mimo-1',
+          giteeToken: env.GITEE_TOKEN || '',
+          gistId: env.GITEE_GIST_ID || '',
+        }),
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        },
+      );
+    }
+
     // 代理 /api/mimo 到 MIMO API
     if (url.pathname === '/api/mimo' || url.pathname.startsWith('/api/mimo')) {
       try {
@@ -43,6 +60,10 @@ export default {
         }
 
         const requestBody = await request.json();
+        
+        // 从环境变量读取模型名称，如果没有则使用请求中的模型名称
+        const modelName = env.MIMO_MODEL_NAME || requestBody.model || 'mimo-1';
+        requestBody.model = modelName;
 
         const mimoResponse = await fetch('https://api.xiaomimimo.com/v1/chat/completions', {
           method: 'POST',

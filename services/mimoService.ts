@@ -62,8 +62,9 @@ export const analyzeText = async (text: string, apiKey: string | null, apiEndpoi
     
     // 使用 OpenAI 兼容格式调用 API
     // 根据 MIMO API 文档调整参数
+    // 注意：生产环境中，模型名称会在 Worker 中被覆盖（从环境变量读取）
     const requestBody: any = {
-      model: modelName || 'mimo-1', // 默认模型名称，可以在设置中自定义
+      model: modelName || 'mimo-1', // 默认模型名称，可以在设置中自定义（开发环境）或 Worker 环境变量（生产环境）
       messages: [
         {
           role: 'system',
