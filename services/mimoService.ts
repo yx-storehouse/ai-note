@@ -2,27 +2,22 @@ import { AnalysisResponse } from "../types";
 
 // 小米 MIMO 大模型 API 调用
 // 注意：请根据实际的 MIMO API 文档调整 endpoint 和请求格式
-export const analyzeText = async (text: string, apiKey: string, apiEndpoint?: string, modelName?: string): Promise<AnalysisResponse> => {
-  if (!apiKey) {
-    throw new Error("API Key 未设置，请在设置中配置 MIMO API Key");
-  }
-
-  // 默认使用通用的 OpenAI 兼容格式，如果 MIMO 有特定格式请修改
-  // 注意：如果 MIMO API 端点不同，请在设置中自定义
+export const analyzeText = async (text: string, apiKey: string | null, apiEndpoint?: string, modelName?: string): Promise<AnalysisResponse> => {
+  // 默认使用通用的 OpenAI 兼容格式，如果 MIMO API 格式不同，请根据实际文档修改
   // 官方文档（OpenAI 格式）端点: https://api.xiaomimimo.com/v1/chat/completions
   // 参考: https://platform.xiaomimimo.com/#/docs/quick-start/first-api-call
   
-  // 开发环境使用 Vite 代理解决 CORS 问题，生产环境直接调用 API
+  // 开发环境使用 Vite 代理解决 CORS 问题，生产环境使用 Worker 代理（API Key 在 Worker 中）
   const isDev = import.meta.env.DEV;
   const defaultEndpoint = isDev 
-    ? '/api/mimo'  // 开发环境使用代理
-    : 'https://api.xiaomimimo.com/v1/chat/completions';  // 生产环境直接调用
+    ? '/api/mimo'  // 开发环境使用 Vite 代理
+    : '/api/mimo';  // 生产环境使用 Worker 代理（同域，无需 CORS）
   
   const endpoint = apiEndpoint?.trim() || defaultEndpoint;
   
-  // 验证 API Key 格式
-  if (!apiKey || apiKey.trim().length === 0) {
-    throw new Error("API Key 不能为空");
+  // 开发环境需要 API Key（从用户输入），生产环境不需要（Worker 中已配置）
+  if (isDev && (!apiKey || apiKey.trim().length === 0)) {
+    throw new Error("开发环境需要配置 API Key，请在设置中输入");
   }
   
   const prompt = `
@@ -89,14 +84,19 @@ export const analyzeText = async (text: string, apiKey: string, apiEndpoint?: st
 
     console.log('请求体:', JSON.stringify(requestBody, null, 2));
 
+    // 构建请求头
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // 开发环境需要传递 API Key，生产环境由 Worker 处理
+    if (isDev && apiKey) {
+      headers['api-key'] = apiKey;
+    }
+    
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // 根据官方文档，使用 api-key 作为请求头传递密钥
-        // 参考: https://platform.xiaomimimo.com/#/docs/quick-start/first-api-call
-        'api-key': apiKey,
-      },
+      headers,
       body: JSON.stringify(requestBody),
     });
 

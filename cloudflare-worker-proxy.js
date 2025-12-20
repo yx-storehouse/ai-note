@@ -18,7 +18,7 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, api-key',
+          'Access-Control-Allow-Headers': 'Content-Type',
           'Access-Control-Max-Age': '86400',
         },
       });
@@ -27,12 +27,13 @@ export default {
     // 代理 /api/mimo 到 MIMO API
     if (url.pathname === '/api/mimo' || url.pathname.startsWith('/api/mimo')) {
       try {
-        const apiKey = request.headers.get('api-key');
+        // 从环境变量读取 API Key（更安全，不会暴露给用户）
+        const apiKey = env.MIMO_API_KEY;
         if (!apiKey) {
           return new Response(
-            JSON.stringify({ error: { message: 'Missing api-key header' } }),
+            JSON.stringify({ error: { message: 'MIMO API Key not configured in Worker environment variables' } }),
             {
-              status: 401,
+              status: 500,
               headers: {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*',
@@ -60,7 +61,7 @@ export default {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, api-key',
+            'Access-Control-Allow-Headers': 'Content-Type',
           },
         });
       } catch (error) {

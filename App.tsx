@@ -222,8 +222,10 @@ export default function App() {
   const handleProcess = async () => {
     if (!inputText.trim()) return;
     
-    if (!apiConfig.apiKey) {
-      setErrorMsg("请先在设置中配置 MIMO API Key");
+    // 开发环境需要 API Key，生产环境由 Worker 处理
+    const isDev = import.meta.env.DEV;
+    if (isDev && !apiConfig.apiKey) {
+      setErrorMsg("开发环境需要配置 MIMO API Key，请在设置中输入");
       setInputMode(false);
       setSettingsMode(true);
       return;
@@ -233,7 +235,9 @@ export default function App() {
     setErrorMsg(null);
 
     try {
-      const response: AnalysisResponse = await analyzeText(inputText, apiConfig.apiKey, apiConfig.apiEndpoint, apiConfig.modelName);
+      // 生产环境传 null，API Key 在 Worker 中
+      const apiKeyForRequest = isDev ? apiConfig.apiKey : null;
+      const response: AnalysisResponse = await analyzeText(inputText, apiKeyForRequest, apiConfig.apiEndpoint, apiConfig.modelName);
       const timestamp = Date.now();
 
       const newNotes: SmartNote[] = response.notes.map(n => ({
@@ -544,16 +548,25 @@ export default function App() {
                          <Icons.Sparkles className="w-4 h-4" /> MIMO AI 配置
                       </h3>
                       <div className="space-y-3">
-                         <div>
-                            <label className="text-xs text-textMuted block mb-1">API Key *</label>
-                            <input 
-                               type="password" 
-                               placeholder="请输入 MIMO API Key" 
-                               value={apiConfig.apiKey}
-                               onChange={(e) => setApiConfig(prev => ({...prev, apiKey: e.target.value}))}
-                               className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
-                            />
-                         </div>
+                         {import.meta.env.DEV ? (
+                            // 开发环境：需要用户输入 API Key
+                            <div>
+                               <label className="text-xs text-textMuted block mb-1">API Key * (仅开发环境)</label>
+                               <input 
+                                  type="password" 
+                                  placeholder="请输入 MIMO API Key" 
+                                  value={apiConfig.apiKey}
+                                  onChange={(e) => setApiConfig(prev => ({...prev, apiKey: e.target.value}))}
+                                  className="w-full bg-surface border border-border rounded p-2 text-sm text-white focus:outline-none focus:border-white/50 font-mono"
+                               />
+                               <p className="text-[10px] text-textMuted mt-1">开发环境需要配置 API Key</p>
+                            </div>
+                         ) : (
+                            // 生产环境：API Key 在 Worker 中配置
+                            <div className="p-3 bg-blue-900/20 border border-blue-500/30 rounded text-xs text-blue-400">
+                               ✓ 生产环境：API Key 已配置在 Cloudflare Worker 中，无需在此输入
+                            </div>
+                         )}
                          <div>
                             <label className="text-xs text-textMuted block mb-1">模型名称 (可选)</label>
                             <input 
@@ -592,13 +605,15 @@ export default function App() {
                             </button>
                             <button
                                onClick={async () => {
-                                  if (!apiConfig.apiKey) {
-                                    showNotification("请先输入 API Key", "warning");
+                                  const isDev = import.meta.env.DEV;
+                                  if (isDev && !apiConfig.apiKey) {
+                                    showNotification("开发环境请先输入 API Key", "warning");
                                     return;
                                   }
                                   try {
                                     setIsProcessing(true);
-                                    const testResponse = await analyzeText("测试", apiConfig.apiKey, apiConfig.apiEndpoint, apiConfig.modelName);
+                                    const apiKeyForTest = isDev ? apiConfig.apiKey : null;
+                                    const testResponse = await analyzeText("测试", apiKeyForTest, apiConfig.apiEndpoint, apiConfig.modelName);
                                     showNotification("API 连接测试成功！", "success");
                                   } catch (err: any) {
                                     showNotification(`测试失败: ${err.message}`, "warning");
@@ -606,15 +621,15 @@ export default function App() {
                                     setIsProcessing(false);
                                   }
                                }}
-                               disabled={isProcessing || !apiConfig.apiKey}
+                               disabled={isProcessing || (import.meta.env.DEV && !apiConfig.apiKey)}
                                className="flex-1 bg-surfaceHighlight hover:bg-white/10 border border-border text-white py-2 rounded text-sm transition-all disabled:opacity-50"
                             >
                                测试连接
                             </button>
                          </div>
-                         {apiConfig.apiKey && (
+                         {import.meta.env.DEV && apiConfig.apiKey && (
                             <div className="p-2 bg-green-900/20 border border-green-500/30 rounded text-xs text-green-400">
-                               ✓ API Key 已配置（长度: {apiConfig.apiKey.length} 字符）
+                               ✓ 开发环境 API Key 已配置（长度: {apiConfig.apiKey.length} 字符）
                             </div>
                          )}
                       </div>

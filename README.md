@@ -23,15 +23,15 @@ View your app in AI Studio: https://ai.studio/apps/drive/1rCP8XZr-IA9nA47q6JGjMX
    npm run dev
    ```
 
-3. **配置 API Key（首次使用）**：
-   - 打开应用后，点击右上角的设置图标
-   - 在设置界面中，输入你的 **MIMO API Key**
-   - （可选）如果需要自定义 API 端点，可以填写 API Endpoint
-   - **开发环境**：会自动使用 Vite 代理 (`/api/mimo`)，解决 CORS 问题
-   - **生产环境**：默认使用 `https://api.xiaomimimo.com/v1/chat/completions`
-   - API Key 会自动保存到浏览器本地存储中，下次打开会自动加载
-   
-   ⚠️ **注意**：如果生产环境遇到 CORS 跨域错误，请参考下面的"解决 CORS 问题"章节
+3. **配置 API Key**：
+   - **开发环境**：
+     - 打开应用后，点击右上角的设置图标
+     - 在设置界面中，输入你的 **MIMO API Key**
+     - API Key 会自动保存到浏览器本地存储中
+   - **生产环境**：
+     - ✅ API Key 已配置在 Cloudflare Worker 中，**不会暴露给用户浏览器**
+     - ✅ 用户无需输入 API Key，更安全
+     - 配置方法见下面的"部署到 Cloudflare Pages"章节
 
 4. **配置 Gitee 同步（可选）**：
    - 在设置界面中，输入 Gitee Access Token 和 Gist ID
@@ -56,10 +56,17 @@ View your app in AI Studio: https://ai.studio/apps/drive/1rCP8XZr-IA9nA47q6JGjMX
    - **Build output directory**: `dist`
    - **Root directory**: `/` (项目根目录)
 
-4. **无需配置环境变量**
-   - ✅ 现在 API Key 通过前端页面输入，存储在用户浏览器本地
-   - ✅ 每个用户使用自己的 API Key，不会在代码中暴露
-   - ✅ 支持用户级别的 API Key 管理，更加安全
+4. **配置 Worker 环境变量（重要！）**
+   - 在 Cloudflare Dashboard 中：
+     1. 进入 **Workers & Pages** → 你的项目 → **Settings** → **Variables**
+     2. 在 **Environment Variables** 部分，点击 **Add variable**
+     3. 添加变量：
+        - **Name**: `MIMO_API_KEY`
+        - **Value**: 你的小米 MIMO API Key
+     4. 点击 **Save** 保存
+   - ✅ API Key 存储在 Worker 环境变量中，**完全不会暴露给用户浏览器**
+   - ✅ 更安全，用户无需输入 API Key
+   - ⚠️ **重要**：配置环境变量后，需要重新部署项目才能生效
 
 5. **部署**
    - 点击 **Save and Deploy**
@@ -68,9 +75,9 @@ View your app in AI Studio: https://ai.studio/apps/drive/1rCP8XZr-IA9nA47q6JGjMX
 ### 注意事项：
 
 - ✅ 项目使用 Vite 构建，默认输出到 `dist` 目录
-- ✅ 所有 API 调用都在客户端进行（小米 MIMO API 和 Gitee API）
-- ✅ API Key 通过前端页面输入，存储在浏览器 localStorage 中，不会在代码中暴露
-- ✅ 每个用户使用自己的 API Key，支持用户级别的配置管理
+- ✅ **生产环境**：API Key 配置在 Cloudflare Worker 环境变量中，**不会暴露给用户浏览器**
+- ✅ **开发环境**：需要在设置中输入 API Key（存储在浏览器 localStorage）
+- ✅ Gitee Token 和 Gist ID 仍存储在用户浏览器 localStorage 中（用户个人配置）
 - ✅ 支持自动部署：每次推送到主分支会自动触发部署
 
 ### 数据存储说明：

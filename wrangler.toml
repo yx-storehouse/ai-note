@@ -5,4 +5,13 @@ compatibility_date = "2025-12-20"
 [assets]
 directory = "./dist"
 
+# 环境变量配置说明：
+# 需要在 Cloudflare Dashboard 中设置以下环境变量：
+# 1. 进入 Workers & Pages → 你的项目 → Settings → Variables
+# 2. 添加环境变量：
+#    - Name: MIMO_API_KEY
+#    - Value: 你的小米 MIMO API Key
+# 3. 保存后重新部署
+#
+# 注意：环境变量是加密存储的，不会暴露给用户浏览器
 
