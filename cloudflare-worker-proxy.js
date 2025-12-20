@@ -2,44 +2,47 @@
  * Cloudflare Workers 代理脚本
  * 用于解决生产环境的 CORS 跨域问题
  * 
- * 部署步骤：
- * 1. 在 Cloudflare Dashboard 中创建新的 Worker
- * 2. 将此代码复制到 Worker 编辑器中
- * 3. 保存并部署
- * 4. 在应用设置中将 API Endpoint 设置为你的 Worker URL，例如：
- *    https://your-worker-name.your-subdomain.workers.dev/api/mimo
+ * 在 Workers & Pages 一体化项目中使用：
+ * - 构建静态资源到 dist/
+ * - 通过 wrangler.toml 的 [assets] 配置挂载静态资源
+ * - 本 Worker 只处理 /api/mimo，其余请求转发给静态资源服务
  */
 
 export default {
   async fetch(request, env, ctx) {
-    // 只处理 POST 请求
-    if (request.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405 });
+    const url = new URL(request.url);
+
+    // 处理预检请求（CORS）
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, api-key',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
     }
 
-    // 获取请求的路径
-    const url = new URL(request.url);
-    
-    // 如果路径是 /api/mimo，则代理到 MIMO API
+    // 代理 /api/mimo 到 MIMO API
     if (url.pathname === '/api/mimo' || url.pathname.startsWith('/api/mimo')) {
       try {
-        // 获取原始请求体
-        const requestBody = await request.json();
-        
-        // 获取 api-key 请求头
         const apiKey = request.headers.get('api-key');
-        
         if (!apiKey) {
           return new Response(
             JSON.stringify({ error: { message: 'Missing api-key header' } }),
-            { 
+            {
               status: 401,
-              headers: { 'Content-Type': 'application/json' }
-            }
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              },
+            },
           );
         }
 
-        // 转发请求到 MIMO API
+        const requestBody = await request.json();
+
         const mimoResponse = await fetch('https://api.xiaomimimo.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -49,11 +52,9 @@ export default {
           body: JSON.stringify(requestBody),
         });
 
-        // 获取响应数据
-        const responseData = await mimoResponse.json();
+        const responseText = await mimoResponse.text();
 
-        // 返回响应，添加 CORS 头
-        return new Response(JSON.stringify(responseData), {
+        return new Response(responseText, {
           status: mimoResponse.status,
           headers: {
             'Content-Type': 'application/json',
@@ -64,28 +65,21 @@ export default {
         });
       } catch (error) {
         return new Response(
-          JSON.stringify({ error: { message: error.message } }),
+          JSON.stringify({ error: { message: error.message || 'Proxy error' } }),
           {
             status: 500,
             headers: {
               'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
             },
-          }
+          },
         );
       }
     }
 
-    // 处理 OPTIONS 预检请求
-    if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, api-key',
-          'Access-Control-Max-Age': '86400',
-        },
-      });
+    // 其他路径交给静态资源处理
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
     }
 
     return new Response('Not found', { status: 404 });
