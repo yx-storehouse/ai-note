@@ -82,7 +82,7 @@ npm run deploy
 | --- | --- | --- |
 | `APP_PASSWORD` | ✅ | 访问密码（建议设为 Secret）。**未设置时所有 `/api/*` 接口返回 503** |
 | `MIMO_API_KEY` | ✅ | 小米 MiMo API Key（Secret） |
-| `MIMO_MODEL_NAME` | | 模型名称，默认 `mimo-v2-flash` |
+| `MIMO_MODEL_NAME` | | 模型名称，默认 `mimo-v2.6-flash`，可选 `mimo-v2.6-pro` 等（见 [模型列表](https://mimo.mi.com/docs/en-US/api/model/list-models)） |
 | `GITEE_TOKEN` | | Gitee 私人令牌（Secret，需要 `gists` 权限），设置后启用云同步 |
 | `GITEE_GIST_ID` | | 存放笔记的 Gist ID。留空时首次上传会自动创建，页面会提示新建的 ID，请把它填回这里 |
 | `MIMO_API_URL` / `GITEE_API_BASE` | | 覆盖上游接口地址，一般不需要 |
@@ -114,7 +114,7 @@ npm run deploy
 - 旧的 `/api/config` 和 `/api/mimo` 接口已删除。旧版 `/api/config` 会把 `GITEE_TOKEN` 返回给任何访问者，**建议在 Gitee 中重新生成一个 Token**
 - 浏览器中保存的明文 API Key 和 Gitee Token 会在首次打开新版本时自动清除
 - 本地开发不再在设置页填写 API Key，改为写入 `.dev.vars`
-- 如果之前没有设置 `MIMO_MODEL_NAME`，默认模型从 `mimo-1` 改为 `mimo-v2-flash`
+- 默认模型改为 `mimo-v2.6-flash`。MiMo 已不再支持 `mimo-v2-flash`，如果 `MIMO_MODEL_NAME` 还是这个值，请改成 `mimo-v2.6-flash` 或删除该变量
 - 现有的本地笔记和 Gist 数据无需迁移
 - 浏览器要求：Chrome 111+ / Safari 16.4+ / Firefox 128+（Tailwind CSS 4 的要求）
 

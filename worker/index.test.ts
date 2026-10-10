@@ -100,7 +100,7 @@ describe('auth', () => {
     const { res, body } = await callJson('/api/status');
     expect(res.status).toBe(200);
     expect(res.headers.get('Cache-Control')).toBe('no-store');
-    expect(body).toEqual({ ai: true, sync: true, model: 'mimo-v2-flash', gistId: 'gist1' });
+    expect(body).toEqual({ ai: true, sync: true, model: 'mimo-v2.6-flash', gistId: 'gist1' });
   });
 
   it('checks auth before routing', async () => {
@@ -130,7 +130,7 @@ describe('POST /api/analyze', () => {
     expect(res.status).toBe(200);
     const [, init] = fetchMock.mock.calls[0];
     const sent = JSON.parse(init.body);
-    expect(sent.model).toBe('mimo-v2-flash');
+    expect(sent.model).toBe('mimo-v2.6-flash');
     expect(sent.messages).toHaveLength(2);
     expect(sent.messages[1].content).toContain('server 1.2.3.4');
     expect(init.headers['api-key']).toBe('mimo-key');
@@ -155,6 +155,13 @@ describe('POST /api/analyze', () => {
     expect(res.status).toBe(502);
     expect(body.error.code).toBe('AI_UPSTREAM_ERROR');
     expect(body.error.message).toContain('Invalid API Key');
+  });
+
+  it('explains an empty MiMo balance', async () => {
+    mimoReply = () => Response.json({ error: { message: 'Insufficient account balance' } }, { status: 402 });
+    const { res, body } = await analyze({ text: 'x' });
+    expect(res.status).toBe(502);
+    expect(body.error.message).toContain('余额不足');
   });
 
   it('reports unusable output', async () => {

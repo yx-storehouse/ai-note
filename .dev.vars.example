@@ -7,8 +7,8 @@ APP_PASSWORD=change-me
 # 必需：小米 MiMo API Key
 MIMO_API_KEY=
 
-# 可选：模型名称（默认 mimo-v2-flash）
-MIMO_MODEL_NAME=mimo-v2-flash
+# 可选：模型名称（默认 mimo-v2.6-flash）
+MIMO_MODEL_NAME=mimo-v2.6-flash
 
 # 可选：Gitee 云同步。Token 需要 gists 权限；Gist ID 留空则首次上传时自动创建
 GITEE_TOKEN=

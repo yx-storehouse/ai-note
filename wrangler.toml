@@ -21,7 +21,7 @@ enabled = true
 #     MIMO_API_KEY      小米 MiMo API Key
 #
 #   可选：
-#     MIMO_MODEL_NAME   模型名称，默认 mimo-v2-flash
+#     MIMO_MODEL_NAME   模型名称，默认 mimo-v2.6-flash
 #     MIMO_API_URL      MiMo 接口地址，默认 https://api.xiaomimimo.com/v1/chat/completions
 #     GITEE_TOKEN       Gitee 私人令牌（Secret，需 gists 权限），启用云同步
 #     GITEE_GIST_ID     存放笔记的 Gist ID，留空则首次上传时自动创建

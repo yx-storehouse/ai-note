@@ -6,7 +6,7 @@ import { HttpError } from './http';
 
 // 小米 MiMo 大模型（OpenAI 兼容格式）
 // 文档: https://platform.xiaomimimo.com/#/docs/quick-start/first-api-call
-export const DEFAULT_MODEL = 'mimo-v2-flash';
+export const DEFAULT_MODEL = 'mimo-v2.6-flash';
 export const DEFAULT_MIMO_URL = 'https://api.xiaomimimo.com/v1/chat/completions';
 export const MAX_TEXT_LENGTH = 20_000;
 const TIMEOUT_MS = 90_000;
@@ -93,9 +93,11 @@ export const analyze = async (text: string, env: Env): Promise<AnalyzeResponse> 
     const hint =
       res.status === 401 || res.status === 403
         ? '，请检查 MIMO_API_KEY'
-        : res.status === 400
-          ? '，请检查 MIMO_MODEL_NAME'
-          : '';
+        : res.status === 402
+          ? '，MiMo 账户余额不足，请到小米 MiMo 开放平台充值'
+          : res.status === 400
+            ? '，请检查 MIMO_MODEL_NAME'
+            : '';
     const detail = await upstreamDetail(res);
     throw new HttpError(502, 'AI_UPSTREAM_ERROR', `AI 服务返回 ${res.status}${hint}${detail ? `：${detail}` : ''}`);
   }
