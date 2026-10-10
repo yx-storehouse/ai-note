@@ -1,0 +1,19 @@
+# 复制为 .dev.vars 后填写（.dev.vars 已在 .gitignore 中，不会被提交）
+# npm run dev 时 Worker 会读取这些变量；线上请在 Cloudflare Dashboard 中配置同名变量
+
+# 必需：访问密码，打开网页后输入它才能使用 AI 分析和云同步
+APP_PASSWORD=change-me
+
+# 必需：小米 MiMo API Key
+MIMO_API_KEY=
+
+# 可选：模型名称（默认 mimo-v2.6-flash）
+MIMO_MODEL_NAME=mimo-v2.6-flash
+
+# 可选：Gitee 云同步。Token 需要 gists 权限；Gist ID 留空则首次上传时自动创建
+GITEE_TOKEN=
+GITEE_GIST_ID=
+
+# 可选：覆盖上游地址（一般不需要，测试时可以指向本地 mock）
+# MIMO_API_URL=https://api.xiaomimimo.com/v1/chat/completions
+# GITEE_API_BASE=https://gitee.com/api/v5

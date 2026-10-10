@@ -1,30 +1,17 @@
-import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { cloudflare } from '@cloudflare/vite-plugin';
+import pkg from './package.json' with { type: 'json' };
 
+// `npm run dev` 会在 workerd 中运行 worker/index.ts，/api/* 与线上行为一致。
+// 本地密钥写在 .dev.vars（参考 .dev.vars.example）。
 export default defineConfig({
+  plugins: [react(), tailwindcss(), cloudflare()],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   server: {
     port: 3000,
-    host: '0.0.0.0',
-    proxy: {
-      // 代理 MIMO API 请求，解决 CORS 问题
-      '/api/mimo': {
-        target: 'https://api.xiaomimimo.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/mimo/, '/v1/chat/completions'),
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            // 代理会将客户端的请求头转发到目标服务器
-            console.log('代理请求到:', proxyReq.path);
-          });
-        },
-      },
-    },
   },
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, '.'),
-    }
-  }
 });
