@@ -3,79 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="用 AI 整理、分类和检索技术笔记、服务器配置与命令" />
+    <meta name="theme-color" content="#050505" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='white'/%3E%3Cpath d='M13 22l-1-3.5a5 5 0 00-3.5-3.5L5 14l3.5-1A5 5 0 0012 9.5L13 6l1 3.5a5 5 0 003.5 3.5L21 14l-3.5 1a5 5 0 00-3.5 3.5z' fill='black'/%3E%3C/svg%3E" />
     <title>智能笔记 AI</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", 'monospace'],
-            },
-            colors: {
-              // Monochrome Palette
-              background: '#050505',
-              surface: '#111111',
-              surfaceHighlight: '#1A1A1A',
-              border: '#2A2A2A',
-              borderHighlight: '#444444',
-              textMain: '#EDEDED',
-              textMuted: '#888888',
-            },
-            animation: {
-              'fade-in': 'fadeIn 0.3s ease-out',
-            },
-            keyframes: {
-              fadeIn: {
-                '0%': { opacity: '0', transform: 'translateY(10px)' },
-                '100%': { opacity: '1', transform: 'translateY(0)' },
-              }
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      /* Dot Grid Background Pattern */
-      .bg-dot-pattern {
-        background-color: #050505;
-        background-image: radial-gradient(#2A2A2A 1px, transparent 1px);
-        background-size: 24px 24px;
-      }
-      
-      /* Subtle Vignette */
-      .vignette {
-        background: radial-gradient(circle at center, transparent 0%, #050505 100%);
-      }
-
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #050505; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #333; 
-        border-radius: 3px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #555; 
-      }
-    </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3"
-  }
-}
-</script>
-</head>
-  <body class="bg-background text-textMain antialiased h-screen overflow-hidden selection:bg-white selection:text-black">
+  </head>
+  <body class="bg-background text-textMain antialiased h-dvh overflow-hidden selection:bg-white selection:text-black">
     <div id="root" class="h-full"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

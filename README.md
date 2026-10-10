@@ -1,130 +1,133 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 智能笔记 AI
 
-# Run and deploy your AI Studio app
+把杂乱的原始文本（服务器信息、命令、账号密码、链接……）粘贴进来，由小米 MiMo 大模型自动拆分成结构化笔记：标题、摘要、分类、标签、关键字段和代码块。笔记保存在浏览器本地，可选通过 Gitee Gist 在多台设备间同步。
 
-This contains everything you need to run your app locally.
+## 功能
 
-View your app in AI Studio: https://ai.studio/apps/drive/1rCP8XZr-IA9nA47q6JGjMXhcvlR8KFOe
+- **AI 整理**：一段文本自动拆成多条笔记，提取 IP / 端口 / 密码等字段，密码类字段默认模糊显示
+- **检索**：搜索标题、摘要、标签、字段和代码块；按分类或点击标签筛选；手机端有分类标签栏
+- **编辑**：修改所有内容，包括代码块、「代码 / 敏感」标记，并可查看 AI 分析前的原始文本
+- **置顶与排序**：按「最近创建 / 最近更新」排序，置顶的笔记始终在最前
+- **撤销**：删除笔记、从云端恢复、导入备份之后都可以撤销
+- **云同步**：Gitee Gist 存储，能识别出另一台设备改过云端数据，不会静默覆盖
+- **安全**：AI Key 和 Gitee Token 只保存在 Cloudflare Worker 中，接口需要访问密码
 
-## Run Locally
+### 快捷键
 
-**Prerequisites:**  Node.js
+| 按键 | 作用 |
+| --- | --- |
+| `/` | 聚焦搜索框 |
+| `Ctrl/⌘ + Enter` | 在输入框中开始分析 / 在编辑框中保存 |
+| `Esc` | 关闭最上层的弹窗；在搜索框中清空搜索 |
 
+## 架构
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+```
+浏览器 (React SPA)  ──/api/*  + Authorization: Bearer <APP_PASSWORD>──▶  Cloudflare Worker
+  └─ localStorage 存放笔记                                                 ├─ POST /api/analyze ─▶ 小米 MiMo
+                                                                           └─ GET/PUT /api/sync ─▶ Gitee Gist
+```
 
-2. Run the app:
-   ```bash
-   npm run dev
-   ```
+- 前端：React 19 + Vite 6 + Tailwind CSS 4（`src/`）
+- 后端：一个 Cloudflare Worker（`worker/`），同时托管静态资源
+- 共享：类型定义和数据整理逻辑（`shared/`）
 
-3. **配置 API Key**：
-   - **开发环境**：
-     - 打开应用后，点击右上角的设置图标
-     - 在设置界面中，输入你的 **MIMO API Key**
-     - API Key 会自动保存到浏览器本地存储中
-   - **生产环境**：
-     - ✅ API Key 已配置在 Cloudflare Worker 中，**不会暴露给用户浏览器**
-     - ✅ 用户无需输入 API Key，更安全
-     - 配置方法见下面的"部署到 Cloudflare Pages"章节
+## 本地开发
 
-4. **配置 Gitee 同步（可选）**：
-   - 在设置界面中，输入 Gitee Access Token 和 Gist ID
-   - 这些信息也会保存在浏览器本地
+需要 Node.js 22.12+。
 
-## Deploy to Cloudflare Pages
+```bash
+npm install
+cp .dev.vars.example .dev.vars   # 填写 APP_PASSWORD 和 MIMO_API_KEY
+npm run dev                      # http://localhost:3000
+```
 
-这个项目可以直接部署到 Cloudflare Pages。
+`npm run dev` 会通过 `@cloudflare/vite-plugin` 在本地运行真实的 Worker，行为与线上一致。打开页面后，第一次使用 AI 分析时会要求输入 `.dev.vars` 里的 `APP_PASSWORD`。
 
-### 部署步骤：
+想用手机访问局域网中的开发服务器时，运行 `npm run dev -- --host`。
 
-1. **准备代码仓库**
-   - 将代码推送到 GitHub 或 GitLab
+| 命令 | 说明 |
+| --- | --- |
+| `npm run dev` | 启动开发服务器 |
+| `npm run typecheck` | 类型检查（前端、Worker、配置文件） |
+| `npm test` | 单元测试（Vitest） |
+| `npm run build` | 构建到 `dist/` |
+| `npm run preview` | 本地预览构建结果（同样会运行 Worker） |
+| `npm run check` | 依次运行类型检查、测试和构建 |
+| `npm run deploy` | 构建并部署到 Cloudflare |
 
-2. **在 Cloudflare Pages 中创建项目**
-   - 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
-   - 进入 **Pages** → **Create a project**
-   - 连接你的 Git 仓库
+## 部署到 Cloudflare Workers
 
-3. **配置构建设置**
-   - **Build command**: `npm run build`
-   - **Build output directory**: `dist`
-   - **Root directory**: `/` (项目根目录)
+### 方式一：连接 Git 仓库自动部署（推荐）
 
-4. **配置 Worker 环境变量（重要！）**
-   - 在 Cloudflare Dashboard 中：
-     1. 进入 **Workers & Pages** → 你的项目 → **Settings** → **Variables**
-     2. 在 **Environment Variables** 部分，点击 **Add variable**
-     3. 添加以下环境变量：
-     
-        **必需变量：**
-        - **Name**: `MIMO_API_KEY`
-          **Value**: 你的小米 MIMO API Key
-     
-        **可选变量（如果不配置，将使用默认值）：**
-        - **Name**: `MIMO_MODEL_NAME`
-          **Value**: 模型名称（默认: `mimo-1`）
-          示例值: `mimo-v2-flash`, `mimo-1`, `mimo-pro` 等
-     
-        - **Name**: `GITEE_TOKEN`
-          **Value**: Gitee Access Token（用于云同步功能）
-     
-        - **Name**: `GITEE_GIST_ID`
-          **Value**: Gist ID（用于存储笔记数据）
-     
-     4. 点击 **Save** 保存
-   - ✅ 所有配置存储在 Worker 环境变量中，**完全不会暴露给用户浏览器**
-   - ✅ 更安全，用户无需输入任何敏感信息
-   - ✅ 生产环境会自动从 Worker 读取配置
-   - ⚠️ **重要**：配置环境变量后，需要重新部署项目才能生效
+1. 在 [Cloudflare Dashboard](https://dash.cloudflare.com/) 中进入 **Workers & Pages → Create → Import a repository**，选择本仓库
+2. 构建设置：
+   - **Build command**：`npm run build`
+   - **Deploy command**：`npx wrangler deploy`
+3. 在 **Settings → Variables and Secrets** 中添加下面的变量，然后重新部署
 
-5. **部署**
-   - 点击 **Save and Deploy**
-   - Cloudflare Pages 会自动构建并部署你的应用
+### 方式二：本地命令行部署
 
-### 注意事项：
+```bash
+npx wrangler login
+npx wrangler secret put APP_PASSWORD
+npx wrangler secret put MIMO_API_KEY
+npx wrangler secret put GITEE_TOKEN      # 可选
+npm run deploy
+```
 
-- ✅ 项目使用 Vite 构建，默认输出到 `dist` 目录
-- ✅ **生产环境**：API Key 配置在 Cloudflare Worker 环境变量中，**不会暴露给用户浏览器**
-- ✅ **开发环境**：需要在设置中输入 API Key（存储在浏览器 localStorage）
-- ✅ Gitee Token 和 Gist ID 仍存储在用户浏览器 localStorage 中（用户个人配置）
-- ✅ 支持自动部署：每次推送到主分支会自动触发部署
+### 环境变量
 
-### 数据存储说明：
+| 名称 | 必需 | 说明 |
+| --- | --- | --- |
+| `APP_PASSWORD` | ✅ | 访问密码（建议设为 Secret）。**未设置时所有 `/api/*` 接口返回 503** |
+| `MIMO_API_KEY` | ✅ | 小米 MiMo API Key（Secret） |
+| `MIMO_MODEL_NAME` | | 模型名称，默认 `mimo-v2-flash` |
+| `GITEE_TOKEN` | | Gitee 私人令牌（Secret，需要 `gists` 权限），设置后启用云同步 |
+| `GITEE_GIST_ID` | | 存放笔记的 Gist ID。留空时首次上传会自动创建，页面会提示新建的 ID，请把它填回这里 |
+| `MIMO_API_URL` / `GITEE_API_BASE` | | 覆盖上游接口地址，一般不需要 |
 
-- **API Key**: 存储在浏览器 `localStorage` 中，键名为 `smart-notes-api-config`
-- **Gitee Token**: 存储在浏览器 `localStorage` 中，键名为 `smart-notes-gitee-config`
-- **笔记数据**: 存储在浏览器 `localStorage` 中，键名为 `smart-notes-data`
-- 所有数据都保存在用户本地浏览器中，不会上传到服务器
+`wrangler.toml` 中设置了 `keep_vars = true`，用 `wrangler deploy` 部署不会清掉 Dashboard 里配置的明文变量。
 
-### 解决 CORS 跨域问题
+### 安全建议
 
-由于浏览器安全策略，前端直接调用 MIMO API 可能会遇到 CORS 跨域问题。
+- 笔记里常有服务器密码，`APP_PASSWORD` 请使用足够长的随机字符串
+- 可以在 Cloudflare **Security → WAF → Rate limiting rules** 中给 `/api/*` 加一条限流规则（免费套餐包含一条），防止暴力猜测密码
+- 访问密码只保存在你自己的浏览器中，可以在「设置 → 访问密码」中清除
 
-#### 开发环境（已自动解决）
-- ✅ 项目已配置 Vite 代理，开发环境会自动使用 `/api/mimo` 代理
-- ✅ 无需额外配置，直接运行 `npm run dev` 即可
+## 数据存储与同步
 
-#### 生产环境解决方案
+- 笔记保存在浏览器 `localStorage`（键名 `smart-notes-data`），查看、编辑、搜索都不需要联网，也不需要密码
+- 云同步保存的是全部笔记的快照，存放在 Gist 的 `smart_notes.json` 中，格式为 `{ "version": 2, "updatedAt": ..., "notes": [...] }`。旧版本的纯数组格式仍然可以读取
+- 打开应用并解锁后会比较本地和云端：
+  - 本地为空：自动加载云端数据
+  - 只有一边有修改：提示上传或恢复
+  - 两边都改过：提示你选择保留哪一份
+- 上传时，如果云端在你上次同步之后被其他设备改过，会提示冲突，不会直接覆盖
+- 侧边栏底部（手机端为右上角的云朵图标）显示同步状态；有未同步的修改时，点击即可上传
+- 「设置 → 本地备份」可以导出 / 导入 JSON
 
-**方案 1：使用 Cloudflare Workers 代理（推荐）**
+## 从旧版本（v1.x）升级
 
-1. 在 Cloudflare Dashboard 中创建新的 Worker
-2. 将项目根目录下的 `cloudflare-worker-proxy.js` 代码复制到 Worker 编辑器
-3. 保存并部署 Worker
-4. 在应用设置中将 API Endpoint 设置为你的 Worker URL，例如：
-   ```
-   https://your-worker-name.your-subdomain.workers.dev/api/mimo
-   ```
+- **必须设置 `APP_PASSWORD`**，否则 AI 分析和云同步都无法使用
+- 构建产物改为 `dist/client`（静态资源）+ `dist/ai_note`（Worker），请按上文更新部署命令
+- 旧的 `/api/config` 和 `/api/mimo` 接口已删除。旧版 `/api/config` 会把 `GITEE_TOKEN` 返回给任何访问者，**建议在 Gitee 中重新生成一个 Token**
+- 浏览器中保存的明文 API Key 和 Gitee Token 会在首次打开新版本时自动清除
+- 本地开发不再在设置页填写 API Key，改为写入 `.dev.vars`
+- 如果之前没有设置 `MIMO_MODEL_NAME`，默认模型从 `mimo-1` 改为 `mimo-v2-flash`
+- 现有的本地笔记和 Gist 数据无需迁移
+- 浏览器要求：Chrome 111+ / Safari 16.4+ / Firefox 128+（Tailwind CSS 4 的要求）
 
-**方案 2：使用其他代理服务**
-- 可以使用任何支持 CORS 的代理服务
-- 在设置中配置代理 URL 作为 API Endpoint
+## 项目结构
 
-**方案 3：后端代理**
-- 如果你有自己的后端服务器，可以在后端设置代理转发请求
+```
+src/
+  App.tsx            页面组装
+  components/        界面组件（卡片、弹窗、侧边栏……）
+  hooks/             鉴权、同步、筛选、快捷键
+  state/             笔记 store（localStorage 持久化）
+  lib/               纯逻辑：搜索排序、同步决策、备份
+  api/client.ts      /api 请求封装
+worker/              Cloudflare Worker：鉴权、MiMo、Gitee
+shared/              前后端共用的类型与数据整理
+```
